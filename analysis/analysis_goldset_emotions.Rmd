@@ -8,7 +8,7 @@ output: html_document
 # Basic data loading and setup
 ## Packages
 ```{r setup, include=FALSE}
- knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(magick)
 ```
@@ -41,6 +41,23 @@ gold_frame_urls =read.csv(frame_urls) %>%
 ```{r}
 d <- gold_sample %>%
   left_join(gold_frame_urls)
+```
+
+## clean up d structure
+```{r}
+# img_src1 = URL for iage
+# short_image_path = has frame/random sampling index
+
+# hand_present_ketan: images where a HUMAN(ketan) said HAND was present 
+# face_present_ketan: images where a HUMAN(ketan) said FACE was present 
+
+# face_openpose: images where a MODEL(openpose) said FACE was present 
+# face_openpose: images where a MODEL(ketan) said HAND was present 
+
+# index = random sampling index (1-24K), not super important but in filename
+
+d <- d %>%
+  select(face_openpose, face_openpose, hand_present_ketan, face_present_ketan, frame, vid_name, img_src1, short_image_path)
 ```
 
 ## face present frames
