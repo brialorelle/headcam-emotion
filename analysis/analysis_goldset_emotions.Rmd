@@ -39,7 +39,7 @@ gold_frame_urls =read.csv(frame_urls) %>%
 
 ## join with urls
 ```{r}
-d <- d %>%d$
+d <- d %>%
   left_join(gold_frame_urls)
 ```
 
