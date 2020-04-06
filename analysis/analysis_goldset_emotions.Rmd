@@ -87,14 +87,14 @@ face_TP_present_filepaths <- d %>%
   filter(face_present_ketan==1 & face_openpose==1) %>%
   select(img_src1, short_image_path) 
 
-write_csv(face_present_filepaths,'TP_faces_present_goldset.csv')
+write_csv(face_TP_present_filepaths,'TP_faces_present_goldset.csv')
 
 # render out some of these...
-dir.create(paste0('face_present_TP/'))
+dir.create(paste0('face_TP_present/'))
 for (i in seq(1,100,1)){
-  image_read(as.character(face_present_filepaths$img_src1[i])) %>%
+  image_read(as.character(face_TP_present_filepaths$img_src1[i])) %>%
   image_append(stack = FALSE) %>%
-  image_write(file.path(paste0("face_present/", face_present_filepaths$short_image_path[i])))
+  image_write(file.path(paste0("face_TP_present/", face_TP_present_filepaths$short_image_path[i])))
 }
 
 ```
