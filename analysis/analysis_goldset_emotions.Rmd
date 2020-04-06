@@ -39,7 +39,7 @@ gold_frame_urls =read.csv(frame_urls) %>%
 
 ## join with urls
 ```{r}
-d <- gold_sample %>%
+d <- d %>%d$
   left_join(gold_frame_urls)
 ```
 
@@ -55,9 +55,10 @@ d <- gold_sample %>%
 # face_openpose: images where a MODEL(ketan) said HAND was present 
 
 # index = random sampling index (1-24K), not super important but in filename
+# Databrary.link -- link to Databrary video
 
 d <- d %>%
-  select(face_openpose, face_openpose, hand_present_ketan, face_present_ketan, frame, vid_name, img_src1, short_image_path)
+  select(face_openpose, face_openpose, hand_present_ketan, face_present_ketan, frame, vid_name, img_src1, short_image_path, Databrary.Link)
 ```
 
 ## face present frames
@@ -78,4 +79,22 @@ for (i in seq(1,100,1)){
   image_append(stack = FALSE) %>%
   image_write(file.path(paste0("face_present/", face_present_filepaths$short_image_path[i])))
 }
+```
+
+# write out true positives
+```{r}
+face_TP_present_filepaths <- d %>%
+  filter(face_present_ketan==1 & face_openpose==1) %>%
+  select(img_src1, short_image_path) 
+
+write_csv(face_present_filepaths,'TP_faces_present_goldset.csv')
+
+# render out some of these...
+dir.create(paste0('face_present_TP/'))
+for (i in seq(1,100,1)){
+  image_read(as.character(face_present_filepaths$img_src1[i])) %>%
+  image_append(stack = FALSE) %>%
+  image_write(file.path(paste0("face_present/", face_present_filepaths$short_image_path[i])))
+}
+
 ```
