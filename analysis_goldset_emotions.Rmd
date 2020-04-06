@@ -1,0 +1,54 @@
+---
+title: "saycam goldset analysis"
+author: "Bria Long"
+date: "12/4/2019, continued 1/9/2020"
+output: html_document
+---
+
+# Basic data loading and setup
+## Packages
+```{r setup, include=FALSE}
+ knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## Read in data 
+### Load ketan's gold set annotations from preprocessed Rdata files
+```{r}
+load('../data/gold_sample_annotations2020-01-31.RData')
+load('../data/saycam_metadata.RData')
+
+### Join metadata with gold set annotations (hereafter 'd')
+d <- gold_sample %>%
+  left_join(meta, by="vid_name")
+```
+
+## preprocess all frame urls
+```{r}
+frame_urls = "../data/frame_urls.csv"
+gold_frame_urls =read.csv(frame_urls) %>%
+    as_tibble() %>%
+    mutate(short_image_path = str_split_fixed(img_src1,'/',7)[,7]) %>%
+    mutate(sample_ind = str_split_fixed(short_image_path,"-",3)[,1], frame_ind_temp = str_split_fixed(short_image_path,"-",3)[,3], vid_name_temp = str_split_fixed(short_image_path,"-",3)[,2]) %>%
+  mutate(sample_ind = as.numeric(sample_ind), frame = as.numeric(str_split_fixed(frame_ind_temp,".jpg",3)[,1])) %>%
+  rowwise() %>%
+  mutate(vid_name = str_split(vid_name_temp,"[.]")[[1]][1]) %>%
+  select(vid_name, frame, short_image_path, img_src1) 
+```
+
+## join with urls
+```{r}
+d <- gold_sample %>%
+  left_join(gold_frame_urls)
+```
+
+## face present frames
+```{r} 
+face_present_filepaths <- d %>%
+  filter(face_present_ketan==1) %>%
+  select(img_src1) 
+```
+
+## write out to csv
+```{r}
+write_csv(face_present_filepaths,'../data/faces_present_goldset.csv')
