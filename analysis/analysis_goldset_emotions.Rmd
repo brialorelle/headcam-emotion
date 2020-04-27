@@ -70,15 +70,15 @@ face_present_filepaths <- d %>%
 
 ## write out to csv
 ```{r}
-write_csv(face_present_filepaths,'faces_present_goldset.csv')
+# write_csv(face_present_filepaths,'faces_present_goldset.csv')
 
 # render out some of these...
-dir.create(paste0('face_present/'))
-for (i in seq(1,100,1)){
-  image_read(as.character(face_present_filepaths$img_src1[i])) %>%
-  image_append(stack = FALSE) %>%
-  image_write(file.path(paste0("face_present/", face_present_filepaths$short_image_path[i])))
-}
+# dir.create(paste0('face_present/'))
+# for (i in seq(1,1000,1)){
+#  image_read(as.character(face_present_filepaths$img_src1[i])) %>%
+#  image_append(stack = FALSE) %>%
+#  image_write(file.path(paste0("face_present/", face_present_filepaths$short_image_path[i])))
+#}
 ```
 
 # write out true positives
@@ -91,7 +91,7 @@ write_csv(face_TP_present_filepaths,'TP_faces_present_goldset.csv')
 
 # render out some of these...
 dir.create(paste0('face_TP_present/'))
-for (i in seq(1,100,1)){
+for (i in seq(1,2777,1)){
   image_read(as.character(face_TP_present_filepaths$img_src1[i])) %>%
   image_append(stack = FALSE) %>%
   image_write(file.path(paste0("face_TP_present/", face_TP_present_filepaths$short_image_path[i])))
