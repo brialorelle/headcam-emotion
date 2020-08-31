@@ -17,7 +17,7 @@ Our work here focuses on these 2778 face frames. We first used Microsoft Azure (
 
 ```{r}
 #Load emotion-detection results
-d0 <- read.csv('data/face_TP_present_YW.csv')
+d0 <- read.csv('data/face_TP_present_azure.csv')
 str(d0)
 ```
 
@@ -178,7 +178,7 @@ We found a similar pattern.
 
 ## load data
 ```{r}
-d <- read.csv('data/Headcam_emotion_annotations_all.csv', fill = TRUE, header = FALSE)
+d <- read.csv('data/face_TP_present_human.csv', fill = TRUE, header = FALSE)
 head(d)
 View(d)
 ```
