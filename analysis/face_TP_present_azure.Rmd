@@ -1,0 +1,214 @@
+---
+title: "headcam_analysis"
+author: "Desmond Ong, Yang Wu"
+date: "5/5/2020, updated 7/16/2020"
+output: html_document
+---
+
+```{r preamble, include=FALSE}
+library(dplyr); library(tidyr)
+library(ggplot2); library(tidyverse) 
+library(eeptools); library(here)
+```
+### Data
+We used frames preprocessed by Bria's saycam study. In that study, human coders annotated 24,000 frames selected uniformly at random from videos of two children (S and A). There were a total of 2778 frames identified by human coders that have faces in them. 
+
+Our work here focuses on these 2778 face frames. We first used Microsoft Azure (https://azure.microsoft.com/en-us/) to detect emotions from these faces. Our analysis here focuses on the emotion-detection results produced by Azure.
+
+```{r}
+#Load emotion-detection results
+d0 <- read.csv('data/face_TP_present_YW.csv')
+str(d0)
+```
+
+### Face detection by Azure
+We first looked at how many faces were detected by this emotion-detection algorithm. 
+
+We found that although all the frames have faces, the algorithm had some difficulty extracting faces. As a quick pass we can see:
+```{r}
+table(d0$gender)
+```
+that it extracted 579 female faces and 258 male faces (29%), and for 1972 frames (71%) it couldn't detect a face.
+
+Why face-detection rate is so low here? To understand this, we coded the first 100 frames in the folder (from 5-A_20130531_0818_01.mp4-8050.jpg to 622-A_20130612_0830_04.mp4-27555.jpg), to see when the emotion-detection algorithm failed to detect a face. Below are some stats:
+
+Among the first 100 frames, the algorithm failed to detect faces in 62 frames. The following factors might have contributed to this failure (note: one face may have several of these issues): 
+
+- face is too small (n = 26)
+
+- face angle is bad (i.e., face profile; n = 23)
+
+- face is not completely in the frame (n = 19)
+
+- face is blurry (n = 6)
+
+- facial hair (n = 4)
+
+- environment is dark (n = 3)
+
+#### Discussion: 
+
+Do you think the algorithm is doing a bad job? Given that detecting and coding emotions require more information than merely detecting faces, the algorithm may have a higher bar for what counts as a face than other face detection algorithms (e.g., OpenPose). So, to some degree it makes sense that it misses faces when faces are too small or are only partially in the frame, although I think it can be improved for detecting emotions from face profiles (Yang: are there existing algorithms that can do this? It seems challenging).  
+
+### Emotion detection
+Of the extracted faces, here are the density plots of the emotions detected.
+Note: the emotion vectors extracted (8 dimensional vector: anger, contempt, disgust, fear, happiness, neutral, sadness, surprise) sum to 1. So a given face may be e.g. 0.9 happy and 0.1 neutral and 0 everything else.
+```{r, fig.width=8, fig.height=8}
+d0_emo_long <- d0 %>% 
+  select(filename, faceId, gender, anger, contempt, disgust, fear, happiness, neutral, sadness, surprise) %>% 
+  gather(emotion, value, -faceId, -gender, -filename) %>% drop_na() %>%
+  mutate(emotion = fct_relevel(emotion, "neutral", "happiness", "surprise", "sadness"))
+
+ggplot(d0_emo_long, aes(x=value, fill=emotion)) + geom_density() + facet_wrap(~emotion, ncol=2, scales="free") + theme_bw()
+ggsave(here("machine.pdf"), width = 8, height = 12)
+```
+
+Most faces are neutral or happy. 
+
+The next categories are surprise and sadness. 
+
+There are very few other negative faces. 
+
+Let's look at the data by summing up all negative faces (including sadness, anger, contempt, disgust, and fear).
+
+```{r, fig.width=8, fig.height=8}
+d0_emo_long_neg <- d0 %>% 
+  mutate(negative = anger + sadness + contempt + disgust + fear) %>%
+  select(faceId, gender, happiness, neutral, surprise, negative) %>% 
+  gather(emotion, value, -faceId, -gender) %>% drop_na() %>%
+  mutate(emotion = fct_relevel(emotion, "neutral", "happiness", "surprise", "negative"))
+
+ggplot(d0_emo_long_neg, aes(x=value, fill=emotion)) + geom_density() + facet_wrap(~emotion, ncol=2, scales="free") + theme_bw()
+```
+
+
+Still, we don't see many negative faces.
+
+### Emotion distribution over age
+How do parents' emotional expressions change as children grow up?
+
+First, we label an emotional expression based on its highest emotion component.
+
+```{r}
+A_dob <- as.Date("20120913", "%Y%m%d") # Alice's birthday
+S_dob <- as.Date("20121017", "%Y%m%d") # Sam's birthday
+
+d0_emo_age <- d0 %>%
+  mutate(negative = anger + sadness + contempt + disgust + fear) %>%
+  separate(filename, c("photoId", "videoId","videoPhotoId"), sep = "-") %>%
+  separate(videoId, c("child", "date", "frame", "num"), sep = "_") %>%
+  mutate(date = as.Date(date, "%Y%m%d")) %>%
+  mutate(age = case_when(child == "A" ~ age_calc(A_dob, enddate=date, units = "months", precise = TRUE),
+                         child == "S" ~ age_calc(S_dob, enddate=date, units = "months", precise = TRUE))) %>%
+  mutate(label = case_when(pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == happiness ~ "happy",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == neutral ~ "neutral",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == surprise ~ "surprise",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == sadness ~ "sad",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == contempt ~ "contempt",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == anger ~ "anger",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == disgust ~ "disgust",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == fear ~ "fear")) %>%
+  select(faceId, age, gender, label) %>%
+  drop_na() %>%
+  mutate(label = fct_relevel(label, "neutral", "happy", "surprise", "sad", "fear"))
+
+table(d0_emo_age$label)
+```
+
+Consistent with our density plots above, we found that very few expressions labeled as "fear," "contempt," "anger," or "disgust."
+
+Let's plot emotions with more than 2 data points.
+
+```{r, fig.width=8, fig.height=8}
+d0_emo_age2 <- d0_emo_age %>%
+  mutate(label = case_when(label == "neutral" ~ "neutral",
+                           label == "happy" ~ "happy",
+                           label == "surprise" ~ "surprise",
+                           label == "sad" ~ "sad")) %>%
+  mutate(label = fct_relevel(label, "neutral", "happy", "surprise")) %>% drop_na() 
+table(d0_emo_age2$label)
+ggplot(d0_emo_age2, aes(x=age, fill=label)) +
+  geom_density() +
+  facet_wrap(~label, ncol=2, scales="free") +
+  theme_bw() +
+  ylim(0, 0.1) 
+```
+
+We see that happy expressions dropped significantly over the second year of life. 
+
+Surprised expressions followed the same pattern.
+
+Sad expressions were relatively stable over the second year.
+
+What about adding up all negative emotions?
+```{r, fig.width=8, fig.height=8}
+d0_emo_age_neg <- d0 %>%
+  mutate(negative = anger + sadness + contempt + disgust + fear) %>%
+  separate(filename, c("photoId", "videoId","videoPhotoId"), sep = "-") %>%
+  separate(videoId, c("child", "date", "frame", "num"), sep = "_") %>%
+  mutate(date = as.Date(date, "%Y%m%d")) %>%
+  mutate(age = case_when(child == "A" ~ age_calc(A_dob, enddate=date, units = "months", precise = TRUE),
+                         child == "S" ~ age_calc(S_dob, enddate=date, units = "months", precise = TRUE))) %>%
+  mutate(label = case_when(pmax(happiness, neutral, surprise, negative) == happiness ~ "happy",
+                           pmax(happiness, neutral, surprise, negative) == neutral ~ "neutral",
+                           pmax(happiness, neutral, surprise, negative) == surprise ~ "surprise",
+                           pmax(happiness, neutral, surprise, negative) == negative ~ "negative")) %>%
+  select(faceId, age, gender, happiness, neutral, surprise, negative, label) %>%
+  drop_na() %>%
+  mutate(label = fct_relevel(label, "neutral", "happy", "surprise", "negative"))
+
+table(d0_emo_age_neg$label)
+
+ggplot(d0_emo_age_neg, aes(x=age, fill=label)) +
+  geom_density() +
+  facet_wrap(~label, ncol=2, scales="free") +
+  theme_bw() +
+  ylim(0, 0.1) 
+```
+
+We found a similar pattern. 
+
+####Discussion: 
+
+(1) The contrast between positive and negative emotions. To what extent do you think the distribution here (recorded by headcam) reflects the real distribution babies see? In any case, if this is the closest we can get, I think the results are valuable to researchers who are interested in babies' early emotional environment.
+
+(2) Different negative emotions. I'm surprised that most negatve emtoions are sadness!! This seems to reject my previous hypothesis: I thought that parents would show, e.g., prototypical facial expressions of disgust to teach babies what not to eat, prototypical facial expressions of fear to teach babies to avoid dangerous situations, or maybe prototypical facial expressions of anger to regulate babies'/toddlers' misbehavior. But it seems that we found (almost) none!! I'm not a parent but my intuition is that these scenarios do happen and it's likely to be recorded by headcam. If this is the case, the results probably suggest that parents do not express emotions as the basic emotion theory proposes? This seems to be consistent, instead, with Lisa F Barrett's theory... 
+
+# Validation of the algorithm
+
+## load data
+```{r}
+d <- read.csv('data/Headcam_emotion_annotations_all.csv', fill = TRUE, header = FALSE)
+head(d)
+View(d)
+```
+## clean data
+```{r}
+d.tidy <- d %>%
+  slice(-1) %>%
+  `colnames<-`(c("path", "coding", "type", "x", "y", "width", "height")) %>%
+  separate(coding, c("label", "happiness", "surprise", "sadness", "anger", "contempt", "disgust", "fear", "neutral", "isBaby","note"), sep = "-", remove = TRUE, convert = FALSE, extra = "warn", fill = "warn") %>%
+  separate(path, c("filepath", "filename"), sep = "azure/", remove = TRUE) %>%
+  select("filename", "happiness", "surprise", "sadness", "anger", "contempt", "disgust", "fear", "neutral", "isBaby","note") %>%
+  mutate(happiness = as.numeric(happiness)/100,
+         surprise = as.numeric(surprise)/100,
+         anger = as.numeric(anger)/100,
+         contempt = as.numeric(contempt)/100,
+         disgust = as.numeric(disgust)/100,
+         fear = as.numeric(fear)/100,
+         neutral = as.numeric(neutral)/100,
+         sadness = as.numeric(sadness)/100) 
+
+
+head(d.tidy)
+View(d.tidy)
+```
+
+```{r, fig.width=8, fig.height=8}
+d.tidy.long <- d.tidy %>% 
+  gather(emotion, value, -filename, -isBaby, -note) %>% drop_na() %>%
+  mutate(emotion = fct_relevel(emotion, "neutral", "happiness", "surprise", "sadness"))
+
+ggplot(d.tidy.long, aes(x=value, fill=emotion)) + geom_density() + facet_wrap(~emotion, ncol=2, scales="free") + theme_bw()
+ggsave(here("human.pdf"), width = 8, height = 12)
+```
