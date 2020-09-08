@@ -1,7 +1,7 @@
 ---
-title: "saycam goldset analysis"
+title: "select frames from goldset analysis"
 author: "Bria Long"
-date: "12/4/2019, continued 1/9/2020"
+date: "12/4/2019, continued 1/9/2020, 9/2020"
 output: html_document
 ---
 
@@ -10,14 +10,15 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
+library(here)
 library(magick)
 ```
 
 ## Read in data 
 ### Load ketan's gold set annotations from preprocessed Rdata files
 ```{r}
-load('../data/gold_sample_annotations2020-01-31.RData')
-load('../data/saycam_metadata.RData')
+load(here('/data/openpose_annotations/gold_sample_annotations2020-01-31.RData'))
+load(here('/data/openpose_annotations/saycam_metadata.RData'))
 
 ### Join metadata with gold set annotations (hereafter 'd')
 d <- gold_sample %>%
@@ -26,7 +27,7 @@ d <- gold_sample %>%
 
 ## preprocess all frame urls
 ```{r}
-frame_urls = "../data/frame_urls.csv"
+frame_urls = "../data/openpose_annotations/frame_urls.csv"
 gold_frame_urls =read.csv(frame_urls) %>%
     as_tibble() %>%
     mutate(short_image_path = str_split_fixed(img_src1,'/',7)[,7]) %>%

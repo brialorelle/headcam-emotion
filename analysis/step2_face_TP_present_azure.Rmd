@@ -17,7 +17,7 @@ Our work here focuses on these 2778 face frames. We first used Microsoft Azure (
 
 ```{r}
 #Load emotion-detection results
-d0 <- read.csv('data/face_TP_present_azure.csv')
+d0 <- read.csv(here('data/emotions_azure/face_TP_present_azure.csv'))
 str(d0)
 ```
 
@@ -95,7 +95,7 @@ S_dob <- as.Date("20121017", "%Y%m%d") # Sam's birthday
 
 d0_emo_age <- d0 %>%
   mutate(negative = anger + sadness + contempt + disgust + fear) %>%
-  separate(filename, c("photoId", "videoId","videoPhotoId"), sep = "-") %>%
+  separate(filename, c("photoId", "videoId","videoPhotoId"), sep = "-", remove=FALSE) %>%
   separate(videoId, c("child", "date", "frame", "num"), sep = "_") %>%
   mutate(date = as.Date(date, "%Y%m%d")) %>%
   mutate(age = case_when(child == "A" ~ age_calc(A_dob, enddate=date, units = "months", precise = TRUE),
@@ -108,7 +108,7 @@ d0_emo_age <- d0 %>%
                            pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == anger ~ "anger",
                            pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == disgust ~ "disgust",
                            pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == fear ~ "fear")) %>%
-  select(faceId, age, gender, label) %>%
+  select(faceId, filename, age, gender, label) %>%
   drop_na() %>%
   mutate(label = fct_relevel(label, "neutral", "happy", "surprise", "sad", "fear"))
 
@@ -126,7 +126,9 @@ d0_emo_age2 <- d0_emo_age %>%
                            label == "surprise" ~ "surprise",
                            label == "sad" ~ "sad")) %>%
   mutate(label = fct_relevel(label, "neutral", "happy", "surprise")) %>% drop_na() 
+
 table(d0_emo_age2$label)
+
 ggplot(d0_emo_age2, aes(x=age, fill=label)) +
   geom_density() +
   facet_wrap(~label, ncol=2, scales="free") +
@@ -178,7 +180,7 @@ We found a similar pattern.
 
 ## load data
 ```{r}
-d <- read.csv('data/face_TP_present_human.csv', fill = TRUE, header = FALSE)
+d <- read.csv(here('data/emotion_human_annotations/face_TP_present_human.csv'), fill = TRUE, header = FALSE)
 head(d)
 View(d)
 ```
@@ -210,5 +212,39 @@ d.tidy.long <- d.tidy %>%
   mutate(emotion = fct_relevel(emotion, "neutral", "happiness", "surprise", "sadness"))
 
 ggplot(d.tidy.long, aes(x=value, fill=emotion)) + geom_density() + facet_wrap(~emotion, ncol=2, scales="free") + theme_bw()
-ggsave(here("human.pdf"), width = 8, height = 12)
+ggsave(here('analysis/figures/human_annotations.pdf'), width = 8, height = 12)
+```
+
+
+## Merge human and azure annotations
+
+```{r}
+merged <- d.tidy %>%
+    mutate(human_label = case_when(pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == happiness ~ "happy",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == neutral ~ "neutral",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == surprise ~ "surprise",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == sadness ~ "sad",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == contempt ~ "contempt",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == anger ~ "anger",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == disgust ~ "disgust",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == fear ~ "fear")) %>%
+  select(human_label, filename, isBaby) %>%
+  left_join(d0_emo_age, by='filename') %>%
+  filter(!is.na(filename))
+```
+
+```{r}
+recall_by_emotion <- merged %>%
+  group_by(human_label) %>%
+  filter(!is.na(human_label)) %>%
+  summarize(percent_agree = mean(human_label == label), num_cases = length(human_label))
+```
+
+
+```{r}
+library(ggthemes)
+
+ggplot(recall_by_emotion, aes(x = human_label, y = percent_agree, size = num_cases, color = human_label)) +
+  theme_few() +
+  geom_point()
 ```

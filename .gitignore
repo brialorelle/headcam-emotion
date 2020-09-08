@@ -1,2 +1,5 @@
 *.DS_Store
 *.jpg
+analysis/TP_faces_present_goldset.csv
+analysis/faces_present_goldset.csv
+.Rproj.user
