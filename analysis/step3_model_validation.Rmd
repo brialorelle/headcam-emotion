@@ -1,0 +1,208 @@
+---
+title: "step3_model_validation"
+author: "Bria Long"
+date: "9/8/2020"
+output: html_document
+---
+
+```{r preamble, include=FALSE}
+library(dplyr); library(tidyr)
+library(ggplot2); library(tidyverse) 
+library(eeptools); library(here)
+library(ggthemes); 
+library(egg); library(knitr)
+```
+
+
+# Load & preprocess data
+
+## Load preprocessed azure data
+```{r}
+## already preprocessed to some extent form previous step
+azure <- read.csv(here('data/emotions_azure/preprocessed_data.csv'), fill = TRUE, header = TRUE) %>%
+  rename(azure_label = label)
+```
+
+## Load and preprocess rekognition data
+```{r}
+rekognition <- read.csv(here('data/emotions_rekognition/face_TP_present_rekognition.csv'), fill = TRUE, header = TRUE) %>%
+  select(time, angry, calm, confused, disgusted, fear, happy, sad, surprised) %>%
+  rename(filename = time) %>%
+  select(-confused) %>% # no corrolary in hiuman coding
+  # make names match those in azure/human data
+   mutate(happiness = as.numeric(happy)/100,
+         surprise = as.numeric(surprised)/100,
+         anger = as.numeric(angry)/100,
+         disgust = as.numeric(disgusted)/100,
+         fear = as.numeric(fear)/100,
+         neutral = as.numeric(calm)/100, 
+         contempt = 0, # filler 
+         sadness = as.numeric(sad)/100) 
+```
+
+```{r}
+rekognition <- rekognition %>%
+  mutate(rekog_label = case_when(pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == happiness ~ "happy",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == neutral ~ "neutral",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == surprise ~ "surprise",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == sadness ~ "sad",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == contempt ~ "contempt",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == anger ~ "anger",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == disgust ~ "disgust",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == fear ~ "fear")) 
+```
+
+## Note that we have many more faces on rekognition dataset
+```{r}
+# How many faces do we have for recognition vs azure?
+sum(!is.na(rekognition$rekog_label))
+
+sum(!is.na(azure$azure_label))
+
+```
+
+
+## Load and preprocess human data
+```{r}
+humans <- read.csv(here('data/emotion_human_annotations/face_TP_present_human.csv'), fill = TRUE, header = FALSE)
+```
+
+```{r}
+## note that there are some rows where the parsing fails (~8 or so, not worrying about for now)
+d.tidy <- humans %>%
+  slice(-1) %>%
+  `colnames<-`(c("path", "coding", "type", "x", "y", "width", "height")) %>%
+  separate(coding, c("label", "happiness", "surprise", "sadness", "anger", "contempt", "disgust", "fear", "neutral", "isBaby","note"), sep = "-", remove = TRUE, convert = FALSE, extra = "warn", fill = "warn") %>%
+  separate(path, c("filepath", "filename"), sep = "azure/", remove = TRUE) %>%
+  select("filename", "happiness", "surprise", "sadness", "anger", "contempt", "disgust", "fear", "neutral", "isBaby","note") %>%
+  mutate(happiness = as.numeric(happiness)/100,
+         surprise = as.numeric(surprise)/100,
+         anger = as.numeric(anger)/100,
+         contempt = as.numeric(contempt)/100,
+         disgust = as.numeric(disgust)/100,
+         fear = as.numeric(fear)/100,
+         neutral = as.numeric(neutral)/100,
+         sadness = as.numeric(sadness)/100) 
+
+
+head(d.tidy)
+# View(d.tidy)
+```
+
+```{r}
+ d.tidy <- d.tidy %>%
+    mutate(human_label = case_when(pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == happiness ~ "happy",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == neutral ~ "neutral",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == surprise ~ "surprise",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == sadness ~ "sad",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == contempt ~ "contempt",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == anger ~ "anger",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == disgust ~ "disgust",
+                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == fear ~ "fear")) %>%
+  select(human_label, filename, isBaby) 
+
+
+```
+
+
+
+```{r}
+merged <-  d.tidy %>%
+  left_join(azure %>% select(azure_label, filename, age), by='filename') %>%
+  filter(!is.na(filename)) %>%
+  left_join(rekognition %>% select(rekog_label, filename), by='filename')
+```
+
+
+
+# Compare human and machine annotations
+
+## Functions to evaluate detections
+```{R}
+# Function to evaluate detectors
+evaluate_detector <- function(truth, detection) {
+  if (truth == TRUE) {
+    if (truth == detection) return ("TP") # e.g. was face/wrist, detected face/wrist
+    else return("FN") # e.g.  was face/wrist, missed face/wrist
+  }
+  else {
+    if (truth == detection) return("TN") # e.g.  was not face/wrist, did not detect face/wrist
+    else return("FP") # e.g.  was not face/wrist, detected face/wrist
+  }
+}
+
+## computers p/r/f as a function of emotion, and detector form merged data
+return_eval = function(this_emotion, which_detector, merged=merged){
+
+ for_eval <- merged %>%
+  filter(!is.na(human_label)) %>%
+  mutate(human = (human_label == this_emotion), machine = (!!as.name(which_detector) == this_emotion)) %>%
+  rowwise() %>%
+  mutate(eval = evaluate_detector(human,machine)) %>%
+  ungroup() %>%
+  summarize(emotion = this_emotion, detector = which_detector, samples = sum(human_label==this_emotion), tp=sum(eval == "TP"), 
+          fp=sum(eval == "FP"), 
+          fn=sum(eval == "FN"),
+          p = tp / (tp + fp),
+          r = tp / (tp + fn),
+          f=( 2 * p * r )/ (p + r))
+}
+
+```
+
+## Go through consistent emotions and each detector and get evaluations 
+```{r}
+
+count = 0
+emotions = c("neutral",  "happy" ,  "sad" ,  "surprise", "fear", "anger")
+for (e in emotions) {
+  for (detector in c('azure_label','rekog_label')) {
+    this_eval = return_eval(e, detector, merged)
+    count = count+ 1
+    if (count==1){
+      all_evals = this_eval
+    }
+    else {
+    all_evals <- all_evals %>%
+      full_join(this_eval)
+    }
+  }
+}
+
+```
+
+## Output table
+```{r}
+all_evals %>%
+  kable()
+```
+
+## Plots of p/r/f
+```{R}
+all_evals <- all_evals %>%
+  mutate(emotion = fct_reorder(emotion, tp, .desc=TRUE))
+
+p = ggplot(all_evals, aes(x=emotion, y=p, col=detector, size = samples)) +
+  geom_point(position = position_dodge(width=.8)) +
+  theme_few() + 
+  theme(legend.position = 'none') + 
+  ggtitle('Precision') + 
+  ylim(0, 1)
+
+r = ggplot(all_evals, aes(x=emotion, y=r, col=detector, size = samples)) +
+  geom_point(position = position_dodge(width=.8)) +
+  theme_few() + 
+  theme(legend.position = 'none')  + 
+  ggtitle('Recall') + 
+  ylim(0, 1)
+ 
+
+f = ggplot(all_evals, aes(x=emotion, y=f, col=detector, size = samples)) +
+  geom_point(position = position_dodge(width=.8)) +
+  theme_few() + 
+  ggtitle('F-score') +
+  ylim(0, 1)
+
+ggarrange(p,r,f, nrow=1)
+
+```

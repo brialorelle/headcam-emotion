@@ -113,6 +113,10 @@ d0_emo_age <- d0 %>%
   mutate(label = fct_relevel(label, "neutral", "happy", "surprise", "sad", "fear"))
 
 table(d0_emo_age$label)
+
+# write out for model validation code
+write_csv(path = here('data/emotions_azure/preprocessed_data.csv'), d0_emo_age)
+
 ```
 
 Consistent with our density plots above, we found that very few expressions labeled as "fear," "contempt," "anger," or "disgust."
@@ -216,35 +220,4 @@ ggsave(here('analysis/figures/human_annotations.pdf'), width = 8, height = 12)
 ```
 
 
-## Merge human and azure annotations
 
-```{r}
-merged <- d.tidy %>%
-    mutate(human_label = case_when(pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == happiness ~ "happy",
-                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == neutral ~ "neutral",
-                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == surprise ~ "surprise",
-                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == sadness ~ "sad",
-                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == contempt ~ "contempt",
-                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == anger ~ "anger",
-                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == disgust ~ "disgust",
-                           pmax(happiness, neutral, surprise, sadness, contempt, anger, disgust, fear) == fear ~ "fear")) %>%
-  select(human_label, filename, isBaby) %>%
-  left_join(d0_emo_age, by='filename') %>%
-  filter(!is.na(filename))
-```
-
-```{r}
-recall_by_emotion <- merged %>%
-  group_by(human_label) %>%
-  filter(!is.na(human_label)) %>%
-  summarize(percent_agree = mean(human_label == label), num_cases = length(human_label))
-```
-
-
-```{r}
-library(ggthemes)
-
-ggplot(recall_by_emotion, aes(x = human_label, y = percent_agree, size = num_cases, color = human_label)) +
-  theme_few() +
-  geom_point()
-```
